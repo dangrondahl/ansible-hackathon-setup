@@ -1,10 +1,11 @@
-- name: Gather inventory
+- name: Collect ip adresses in resource group
   hosts: localhost
   gather_facts: false
   vars:
-    filename: azurehosts2
+    filename: azurehosts
+    resource_group: ansiblehack-rg
   tasks:
     - name: "Create {{ filename }} file"
       shell: |
         echo "[hostmachines]" > {{ filename }}
-        az vm list-ip-addresses -g ansiblehack-rg --output table | awk 'NR>2{print $1"    ansible_host="$2}' >> {{ filename }}
+        az vm list-ip-addresses -g {{ resource_group }}  --output table | awk 'NR>2{print $1"    ansible_host="$2}' >> {{ filename }}

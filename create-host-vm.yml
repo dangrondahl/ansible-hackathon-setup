@@ -13,7 +13,6 @@
     securitygroup_name: "{{project_prefix}}-nsg"
 
     vm_admin: "dgg"
-    vm_user: "developer"
     vm_password: "hack@123456"
 
     host_vm_prefix: "host"
