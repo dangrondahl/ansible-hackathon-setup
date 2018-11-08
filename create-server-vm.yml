@@ -1,0 +1,75 @@
+# Description
+# ===========
+# This playbook creates an Azure Windows VM with public IP. It also cobnfigures the machine to be accessible via Ansible using WinRM.
+# This playbook originally comes from @jborean93 (https://github.com/jborean93/ansible-win-demos)
+- name: Provision Ansible target servers
+  hosts: localhost
+  vars:
+    project_prefix: "ansiblehack"
+    resourcegroup_name: "{{project_prefix}}-rg"
+    virtualnetwork_name: "{{project_prefix}}-vnet"
+    subnet_name: "{{project_prefix}}-subnet"
+    securitygroup_name: "{{project_prefix}}-nsg"
+
+    vm_user: "developer"
+    vm_password: "hack@123456"
+
+    host_vm_prefix: "host"
+    host_count: 2
+    
+    target_vm_prefix: "server"
+    target_count: "{{ host_count * 2 }}"
+
+    # Below is UTF-16 Base64 encoding for:
+    #   Invoke-Expression -Command ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1')); Enable-WSManCredSSP -Role Server -Force
+    winrm_enable_script: SQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuACAALQBDAG8AbQBtAGEAbgBkACAAKAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABTAHkAcwB0AGUAbQAuAE4AZQB0AC4AVwBlAGIAQwBsAGkAZQBuAHQAKQAuAEQAbwB3AG4AbABvAGEAZABTAHQAcgBpAG4AZwAoACcAaAB0AHQAcABzADoALwAvAHIAYQB3AC4AZwBpAHQAaAB1AGIAdQBzAGUAcgBjAG8AbgB0AGUAbgB0AC4AYwBvAG0ALwBhAG4AcwBpAGIAbABlAC8AYQBuAHMAaQBiAGwAZQAvAGQAZQB2AGUAbAAvAGUAeABhAG0AcABsAGUAcwAvAHMAYwByAGkAcAB0AHMALwBDAG8AbgBmAGkAZwB1AHIAZQBSAGUAbQBvAHQAaQBuAGcARgBvAHIAQQBuAHMAaQBiAGwAZQAuAHAAcwAxACcAKQApADsAIABFAG4AYQBiAGwAZQAtAFcAUwBNAGEAbgBDAHIAZQBkAFMAUwBQACAALQBSAG8AbABlACAAUwBlAHIAdgBlAHIAIAAtAEYAbwByAGMAZQA=
+
+  tasks:
+    - name: Create public IP address for each host
+      azure_rm_publicipaddress:
+        resource_group: "{{ resourcegroup_name }}"
+        allocation_method: Static
+        name: "{{ item }}_ip"
+      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02x"
+
+    - name: Create a network interface for each VM
+      azure_rm_networkinterface:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ item }}_nic"
+        virtual_network: "{{ virtualnetwork_name }}"
+        subnet: "{{ subnet_name }}"
+        security_group: "{{ securitygroup_name }}"
+        ip_configurations:
+          - name: "ipconfig"
+            public_ip_address_name: "{{item}}_ip"
+            primary: True
+      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02x"
+
+    - name: Create server VMs
+      azure_rm_virtualmachine:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ item }}-vm"
+        vm_size: Standard_D1_v2
+        admin_username: '{{ vm_user }}'
+        admin_password: "{{ vm_password }}"
+        os_type: Windows
+        network_interfaces: "{{ item }}_nic"
+        image:
+          offer: WindowsServer
+          publisher: MicrosoftWindowsServer
+          sku: 2016-Datacenter
+          version: latest
+        state: present
+      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02x"
+
+    - name: create Azure vm extension to enable HTTPS WinRM listener
+      azure_rm_virtualmachine_extension:
+        name: winrm-extension
+        resource_group: "{{ resourcegroup_name }}"
+        virtual_machine_name: "{{ item }}-vm"
+        publisher: Microsoft.Compute
+        virtual_machine_extension_type: CustomScriptExtension
+        type_handler_version: 1.9
+        settings: '{"commandToExecute": "powershell.exe -ExecutionPolicy ByPass -EncodedCommand {{winrm_enable_script}}"}'
+        auto_upgrade_minor_version: true
+      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02x"
