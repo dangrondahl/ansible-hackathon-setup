@@ -1,0 +1,4 @@
+- hosts: hostmachines
+  become: true
+  roles:
+    - role: geerlingguy.ansible

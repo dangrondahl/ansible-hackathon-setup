@@ -1,0 +1,143 @@
+# Description
+# ===========
+# This playbook creates an Azure Windows VM with public IP. It also cobnfigures the machine to be accessible via Ansible using WinRM.
+# This playbook originally comes from @jborean93 (https://github.com/jborean93/ansible-win-demos)
+- name: provision new azure host
+  hosts: localhost
+  vars:
+    location: westeurope
+    project_prefix: "ansiblehack"
+    resourcegroup_name: "{{project_prefix}}-rg"
+    virtualnetwork_name: "{{project_prefix}}-vnet"
+    subnet_name: "{{project_prefix}}-subnet"
+    securitygroup_name: "{{project_prefix}}-nsg"
+
+    vm_admin: "dgg"
+    vm_user: "developer"
+    vm_password: "hack@123456"
+
+    host_vm_prefix: "host"
+    host_count: 2
+    
+    target_vm_prefix: "server"
+    target_count: "{{ host_count * 2 }}"
+
+    # Below is UTF-16 Base64 encoding for:
+    #   Invoke-Expression -Command ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1')); Enable-WSManCredSSP -Role Server -Force
+    winrm_enable_script: SQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuACAALQBDAG8AbQBtAGEAbgBkACAAKAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABTAHkAcwB0AGUAbQAuAE4AZQB0AC4AVwBlAGIAQwBsAGkAZQBuAHQAKQAuAEQAbwB3AG4AbABvAGEAZABTAHQAcgBpAG4AZwAoACcAaAB0AHQAcABzADoALwAvAHIAYQB3AC4AZwBpAHQAaAB1AGIAdQBzAGUAcgBjAG8AbgB0AGUAbgB0AC4AYwBvAG0ALwBhAG4AcwBpAGIAbABlAC8AYQBuAHMAaQBiAGwAZQAvAGQAZQB2AGUAbAAvAGUAeABhAG0AcABsAGUAcwAvAHMAYwByAGkAcAB0AHMALwBDAG8AbgBmAGkAZwB1AHIAZQBSAGUAbQBvAHQAaQBuAGcARgBvAHIAQQBuAHMAaQBiAGwAZQAuAHAAcwAxACcAKQApADsAIABFAG4AYQBiAGwAZQAtAFcAUwBNAGEAbgBDAHIAZQBkAFMAUwBQACAALQBSAG8AbABlACAAUwBlAHIAdgBlAHIAIAAtAEYAbwByAGMAZQA=
+
+  tasks:
+    - name: "Create {{ resourcegroup_name }} Resource Group"
+      azure_rm_resourcegroup:
+        name: "{{ resourcegroup_name }}"
+        location: "{{ location }}"
+
+    - name: "Create {{virtualnetwork_name}} Virtual Network"
+      azure_rm_virtualnetwork:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ virtualnetwork_name }}"
+        address_prefixes: "10.0.0.0/16"
+
+    - name: "Create {{subnet_name}} Subnet in {{virtualnetwork_name}} for host"
+      azure_rm_subnet:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ subnet_name }}"
+        address_prefix: "10.0.1.0/24"
+        virtual_network: "{{ virtualnetwork_name }}"
+  
+    - name: Create public IP address for each host
+      azure_rm_publicipaddress:
+        resource_group: "{{ resourcegroup_name }}"
+        allocation_method: Static
+        name: "{{ item }}_ip"
+      with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02x"
+
+    - name: "Create {{securitygroup_name}} security rules for hosts"
+      azure_rm_securitygroup:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ securitygroup_name }}"
+        rules:
+          - name: SSH
+            protocol: Tcp
+            destination_port_range: 22
+            access: Allow
+            priority: 1001
+            direction: Inbound
+
+    - name: Create a network interface for each VM
+      azure_rm_networkinterface:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ item }}_nic"
+        virtual_network: "{{ virtualnetwork_name }}"
+        subnet: "{{ subnet_name }}"
+        security_group: "{{ securitygroup_name }}"
+        ip_configurations:
+          - name: "ipconfig"
+            public_ip_address_name: "{{item}}_ip"
+            primary: True
+      with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02x"
+
+    - name: Create host VMs
+      azure_rm_virtualmachine:
+        resource_group: "{{ resourcegroup_name }}"
+        name: "{{ item }}-vm"
+        vm_size: Standard_DS1_v2
+        admin_username: "{{ vm_admin }}"
+        admin_password: "{{ vm_password }}"
+        ssh_public_keys:
+          - path: "/home/{{ vm_admin }}/.ssh/authorized_keys"
+            key_data: "{{lookup('file', '~/.ssh/id_rsa.pub') }}"        
+        network_interfaces: "{{ item }}_nic"
+        image:
+          offer: UbuntuServer
+          publisher: Canonical
+          sku: 18.04-LTS
+          version: latest
+      with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02x"  
+
+#  - name: create Azure storage account
+#    azure_rm_storageaccount:
+#      name: '{{ vm_name }}'
+#      resource_group: "{{ resource_group }}"
+#      account_type: Standard_LRS
+#
+#  - name: provision new Azure virtual host
+#    azure_rm_virtualmachine:
+#      admin_username: '{{ vm_user }}'
+#      admin_password: "{{ vm_password }}"
+#      os_type: Windows
+#      image:
+#        offer: WindowsServer
+#        publisher: MicrosoftWindowsServer
+#        sku: 2016-Datacenter
+#        version: latest
+#      name: "{{ vm_name }}"
+#      resource_group: "{{ resource_group }}"
+#      state: present
+#      vm_size: Standard_D1
+#      storage_account_name: "{{ vm_name }}"
+#      virtual_network_name: "{{ vm_name }}"
+#      subnet_name: "{{ vm_name }}"
+#    register: vm_result
+#
+#  - name: create Azure vm extension to enable HTTPS WinRM listener
+#    azure_rm_virtualmachine_extension:
+#      name: winrm-extension
+#      resource_group: "{{ resource_group }}"
+#      virtual_machine_name: "{{ vm_name }}"
+#      publisher: Microsoft.Compute
+#      virtual_machine_extension_type: CustomScriptExtension
+#      type_handler_version: 1.9
+#      settings: '{"commandToExecute": "powershell.exe -ExecutionPolicy ByPass -EncodedCommand {{winrm_enable_script}}"}'
+#      auto_upgrade_minor_version: true
+#
+#  - name: wait for the WinRM port to come online
+#    wait_for:
+#      port: 5986
+#      host: '{{azure_vm.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress}}'
+#      timeout: 600
+#
+#  - name: Display Virtual Machine results
+#    debug:
+#      msg: "{{ vm_result  }}"
+#
