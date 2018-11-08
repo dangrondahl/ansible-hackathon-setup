@@ -1,0 +1,10 @@
+- name: Gather inventory
+  hosts: localhost
+  gather_facts: false
+  vars:
+    filename: azurehosts2
+  tasks:
+    - name: "Create {{ filename }} file"
+      shell: |
+        echo "[hostmachines]" > {{ filename }}
+        az vm list-ip-addresses -g ansiblehack-rg --output table | awk 'NR>2{print $1"    ansible_host="$2}' >> {{ filename }}
