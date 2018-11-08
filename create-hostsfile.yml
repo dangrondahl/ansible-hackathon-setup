@@ -4,8 +4,18 @@
   vars:
     filename: azurehosts
     resource_group: ansiblehack-rg
+    host_count: 2
+    hosts_start_line: 2
+    hosts_end_line: "{{ hosts_start_line * host_count}}"
+
+    server_count: "{{ host_count * 2 }}"
+    server_start_line: "{{ hosts_end_line }}"
+
   tasks:
     - name: "Create {{ filename }} file"
       shell: |
         echo "[hostmachines]" > {{ filename }}
-        az vm list-ip-addresses -g {{ resource_group }}  --output table | awk 'NR>2{print $1"    ansible_host="$2}' >> {{ filename }}
+        az vm list-ip-addresses -g {{ resource_group }}  --output table | awk 'NR>{{ hosts_start_line }}&&NR<={{ hosts_end_line }}{print $1"    ansible_host="$2}' >> {{ filename }}
+        echo >> {{ filename }}
+        echo "[servers]" >> {{ filename }}
+        az vm list-ip-addresses -g {{ resource_group }}  --output table | awk 'NR>{{ server_start_line }}{print $1"    ansible_host="$2}' >> {{ filename }}
