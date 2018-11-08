@@ -33,15 +33,45 @@ ansible-playbook -i azurehosts provision-hosts.yml
 
 To install ansible, pywinrm, and creation of the `developer` use by which the developers on the hackathon logs into the hostmachines.
 
-From here on, it should be possible to log into a host machine using SSH:
+## Validation
+
+From here on SSH into a host machine using the `developer` user:
 
 ```bash
 ssh developer@<host-ip>
 ```
 
-To test if it has access to the target machines, one could create a hosts file on the hosts machine by echoing the following into `hosts`:
+where \<host-ip\> is one of the ip adresses under `[hostmachines]` in `azurehosts`.
+
+To validate if the host has access to the target machines, create an inventory file on the host machine by echoing the following into `hosts`:
 
 ```bash
 echo -e  "[servers]\n10.0.1.[6:9] ansible_user=developer ansible_password=hack@123456 ansible_port=5986 ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> hosts
 ```
 
+Now just run:
+
+```bash
+ansible all -i hosts -m win_ping
+```
+
+The response should be as below, in which case, the environment is ready for the hackathon:
+
+```bash
+10.0.1.6 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+10.0.1.9 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+10.0.1.8 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+10.0.1.7 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
