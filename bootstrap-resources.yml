@@ -4,6 +4,16 @@
 # This playbook originally comes from @jborean93 (https://github.com/jborean93/ansible-win-demos)
 - name: provision new azure host
   hosts: localhost
+
+  vars_prompt:
+    - name: "admin_username"
+      prompt: "What is your username?"
+      private: no
+    - name: "admin_pub_path"
+      prompt: "Where is your public key located?"
+      private: no
+      default: "~/.ssh/id_rsa.pub"
+
   vars:
     location: westeurope
     project_prefix: "ansiblehack"
@@ -12,13 +22,11 @@
     subnet_name: "{{project_prefix}}-subnet"
     securitygroup_name: "{{project_prefix}}-nsg"
 
-    vm_admin: "dgg"
-    vm_admin_password: "hack@123456"
     vm_user: "developer"
     vm_user_password: "hack@123456"
 
     host_vm_prefix: "host"
-    host_count: 2
+    host_count: 3
 
     target_vm_prefix: "server"
     target_count: "{{ host_count * 2 }}"
@@ -108,11 +116,11 @@
         resource_group: "{{ resourcegroup_name }}"
         name: "{{ item }}-vm"
         vm_size: Standard_DS1_v2
-        admin_username: "{{ vm_admin }}"
-        admin_password: "{{ vm_admin_password }}"
+        admin_username: "{{ admin_username }}"
+        ssh_password_enabled: false
         ssh_public_keys:
-          - path: "/home/{{ vm_admin }}/.ssh/authorized_keys"
-            key_data: "{{lookup('file', '~/.ssh/id_rsa.pub') }}"        
+          - path: "/home/{{admin_username}}/.ssh/authorized_keys"
+            key_data: "{{lookup('file', '{{admin_pub_path}}') }}"
         network_interfaces: "{{ item }}_nic"
         image:
           offer: UbuntuServer
