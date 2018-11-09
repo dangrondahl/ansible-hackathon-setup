@@ -5,7 +5,7 @@
     filename: azurehosts
     resource_group: ansiblehack-rg
     
-    host_count: 3
+    host_count: 2
     hosts_start_line: 2
     hosts_end_line: "{{ hosts_start_line * host_count}}"
 
