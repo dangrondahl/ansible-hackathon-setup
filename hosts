@@ -1,4 +1,1 @@
 localhost              ansible_connection=local
-
-[hostmachines]
-host01          ansible_host=23.97.151.18     ansible_user=developer
