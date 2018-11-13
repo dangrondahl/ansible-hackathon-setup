@@ -6,30 +6,44 @@
   hosts: localhost
 
   vars_prompt:
-    - name: "admin_username"
-      prompt: "What is your username?"
+    - name: "project_prefix"
+      prompt: "Prefix of this project"
+      default: "ansiblehack"
       private: no
-    - name: "admin_pub_path"
-      prompt: "Where is your public key located?"
+    - name: "host_count"
+      prompt: "How many hosts?"
+      default: 1
       private: no
-      default: "~/.ssh/id_rsa.pub"
+    - name: "server_count"
+      prompt: "How many servers?"
+      default: 1
+      private: no
+    - name: "host_admin"
+      prompt: "Host administrator?"
+      private: no
+    - name: "host_admin_password"
+      prompt: "Password of the host administrator?"
+      private: yes
+    - name: "server_admin"
+      prompt: "Server administrator?"
+      default: "developer"
+      private: no
+    - name: "server_admin_password"
+      prompt: "Password of the server administrator?"
+      private: yes
 
   vars:
     location: westeurope
-    project_prefix: "ansiblehack"
     resourcegroup_name: "{{project_prefix}}-rg"
     virtualnetwork_name: "{{project_prefix}}-vnet"
     subnet_name: "{{project_prefix}}-subnet"
     securitygroup_name: "{{project_prefix}}-nsg"
 
-    vm_user: "developer"
-    vm_user_password: "hack@123456"
+    # The network security group only allows SSH and RDP to the host and servers from this IP source.
+    kamstrup_ip_address: 185.181.22.4
 
     host_vm_prefix: "host"
-    host_count: 2
-
-    target_vm_prefix: "server"
-    target_count: "{{ host_count * 2 }}"
+    server_vm_prefix: "server"
 
     # Below is UTF-16 Base64 encoding for:
     #   Invoke-Expression -Command ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1')); Enable-WSManCredSSP -Role Server -Force
@@ -60,12 +74,14 @@
         name: "{{ securitygroup_name }}"
         rules:
           - name: SSH
+            source_address_prefix: "{{ kamstrup_ip_address }}"
             protocol: Tcp
             destination_port_range: 22
             access: Allow
             priority: 1001
             direction: Inbound
           - name: RDP
+            source_address_prefix: "{{ kamstrup_ip_address }}"
             destination_port_range: 3389
             access: Allow
             priority: 1002
@@ -77,13 +93,33 @@
         allocation_method: Static
         name: "{{ item }}_ip"
       with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02d"
+      register: host_ips
+      async: 45
+      poll: 0
+
+    - name: Wait for host IP creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: host_ip_jobs
+      until: host_ip_jobs.finished
+      retries: 300
+      with_items: "{{ host_ips.results }}"
 
     - name: Create public IP address for each server
       azure_rm_publicipaddress:
         resource_group: "{{ resourcegroup_name }}"
         allocation_method: Static
         name: "{{ item }}_ip"
-      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02d"
+      with_sequence: "count={{ server_count }} format={{ server_vm_prefix }}%02d"
+      register: server_ips
+      async: 45
+      poll: 0
+      
+    - name: Wait for server IP creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: server_ip_jobs
+      until: server_ip_jobs.finished
+      retries: 300
+      with_items: "{{ server_ips.results }}"
 
     - name: Create a network interface for each host VM
       azure_rm_networkinterface:
@@ -97,6 +133,16 @@
             public_ip_address_name: "{{item}}_ip"
             primary: True
       with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02d"
+      register: host_nics
+      async: 45
+      poll: 0
+
+    - name: Wait for host NIC creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: host_nic_jobs
+      until: host_nic_jobs.finished
+      retries: 300
+      with_items: "{{ host_nics.results }}"
 
     - name: Create a network interface for each server VM
       azure_rm_networkinterface:
@@ -109,18 +155,25 @@
           - name: "ipconfig"
             public_ip_address_name: "{{item}}_ip"
             primary: True
-      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02d"
+      with_sequence: "count={{ server_count }} format={{ server_vm_prefix }}%02d"
+      register: server_nics
+      async: 45
+      poll: 0
+
+    - name: Wait for server NIC creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: server_nic_jobs
+      until: server_nic_jobs.finished
+      retries: 300
+      with_items: "{{ server_nics.results }}"
 
     - name: Create host VMs
       azure_rm_virtualmachine:
         resource_group: "{{ resourcegroup_name }}"
         name: "{{ item }}-vm"
         vm_size: Standard_B1ms
-        admin_username: "{{ admin_username }}"
-        ssh_password_enabled: false
-        ssh_public_keys:
-          - path: "/home/{{admin_username}}/.ssh/authorized_keys"
-            key_data: "{{lookup('file', '{{admin_pub_path}}') }}"
+        admin_username: "{{ host_admin }}"
+        admin_password: "{{ host_admin_password }}"
         network_interfaces: "{{ item }}_nic"
         image:
           offer: UbuntuServer
@@ -128,14 +181,24 @@
           sku: 18.04-LTS
           version: latest
       with_sequence: "count={{ host_count }} format={{ host_vm_prefix }}%02d"
+      register: host_instances
+      async: 7200
+      poll: 0
+
+    - name: Wait for host VM creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: host_jobs
+      until: host_jobs.finished
+      retries: 300
+      with_items: "{{ host_instances.results }}"
 
     - name: Create server VMs
       azure_rm_virtualmachine:
         resource_group: "{{ resourcegroup_name }}"
         name: "{{ item }}-vm"
         vm_size: Standard_B1ms
-        admin_username: '{{ vm_user }}'
-        admin_password: "{{ vm_user_password }}"
+        admin_username: '{{ server_admin }}'
+        admin_password: "{{ server_admin_password }}"
         os_type: Windows
         network_interfaces: "{{ item }}_nic"
         image:
@@ -144,7 +207,17 @@
           sku: 2016-Datacenter
           version: latest
         state: present
-      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02d"
+      with_sequence: "count={{ server_count }} format={{ server_vm_prefix }}%02d"
+      register: server_instances
+      async: 7200
+      poll: 0
+
+    - name: Wait for server VM creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: server_jobs
+      until: server_jobs.finished
+      retries: 300
+      with_items: "{{ server_instances.results }}"
 
     - name: create Azure vm extension to enable HTTPS WinRM listener for servers
       azure_rm_virtualmachine_extension:
@@ -156,4 +229,14 @@
         type_handler_version: 1.9
         settings: '{"commandToExecute": "powershell.exe -ExecutionPolicy ByPass -EncodedCommand {{winrm_enable_script}}"}'
         auto_upgrade_minor_version: true
-      with_sequence: "count={{ target_count }} format={{ target_vm_prefix }}%02d"
+      with_sequence: "count={{ server_count }} format={{ server_vm_prefix }}%02d"
+      register: winrm_instances
+      async: 7200
+      poll: 0
+
+    - name: Wait for winrm creations to complete
+      async_status: "jid={{ item.ansible_job_id }}"
+      register: server_jobs
+      until: server_jobs.finished
+      retries: 300
+      with_items: "{{ server_instances.results }}"      

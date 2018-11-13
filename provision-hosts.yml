@@ -20,3 +20,6 @@
         comment: Developer
         password: "{{ password }}"
         group: admin
+    - name: "Install tree"
+      apt: 
+        name: tree
