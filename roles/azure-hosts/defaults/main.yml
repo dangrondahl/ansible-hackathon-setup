@@ -1,0 +1,7 @@
+---
+# defaults file for roles/azure-hosts
+hostfile: azurehosts
+
+hosts_start_line: 2
+hosts_end_line: "{{ hosts_start_line + host_count}}"
+server_start_line: "{{ hosts_end_line }}"

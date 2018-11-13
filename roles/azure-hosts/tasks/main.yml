@@ -1,0 +1,9 @@
+---
+# tasks file for roles/azure-hosts
+- name: "Create {{ hostfile }} file"
+  shell: |
+    echo "[hosts]" > {{ hostfile }}
+    az vm list-ip-addresses -g {{ resourcegroup_name }}  --output table | awk 'NR>{{ hosts_start_line }}&&NR<={{ hosts_end_line }}{print $1"    ansible_host="$2}' >> {{ hostfile }}
+    echo >> {{ hostfile }}
+    echo "[servers]" >> {{ hostfile }}
+    az vm list-ip-addresses -g {{ resourcegroup_name }}  --output table | awk 'NR>{{ server_start_line }}{print $1"    ansible_host="$2}' >> {{ hostfile }}

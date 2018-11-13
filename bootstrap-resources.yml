@@ -24,3 +24,4 @@
     server_count: 1
   roles:
     - azure-setup
+    - azure-hosts
