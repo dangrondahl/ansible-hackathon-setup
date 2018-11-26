@@ -129,9 +129,12 @@
   azure_rm_virtualmachine:
     resource_group: "{{ resourcegroup_name }}"
     name: "{{ item }}-vm"
-    vm_size: Standard_B1ms
+    vm_size: "{{ host_vm_size }}"
     admin_username: "{{ host_admin }}"
     admin_password: "{{ host_admin_password }}"
+    ssh_public_keys:
+      - path: "/home/{{ host_admin }}/.ssh/authorized_keys"
+        key_data: "{{lookup('file', '{{ host_admin_pub_path }}') }}"
     network_interfaces: "{{ item }}_nic"
     image:
       offer: UbuntuServer
@@ -154,7 +157,7 @@
   azure_rm_virtualmachine:
     resource_group: "{{ resourcegroup_name }}"
     name: "{{ item }}-vm"
-    vm_size: Standard_B1ms
+    vm_size: "{{ server_vm_size }}"
     admin_username: '{{ server_admin }}'
     admin_password: "{{ server_admin_password }}"
     os_type: Windows

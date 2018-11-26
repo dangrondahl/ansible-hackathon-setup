@@ -5,12 +5,20 @@
   hosts: localhost
 
   vars_prompt:
+    - name: "host_count"
+      prompt: "Number of hosts?"
+      default: 1
+      private: no
     - name: "host_admin"
       prompt: "Host administrator?"
       private: no
     - name: "host_admin_password"
       prompt: "Password of the host administrator?"
       private: yes
+    - name: "server_count"
+      prompt: "Number of servers?"
+      default: 1
+      private: no      
     - name: "server_admin"
       prompt: "Server administrator?"
       default: "developer"
@@ -20,8 +28,6 @@
       private: yes
   vars:
     project_prefix: ansiblehack
-    host_count: 1
-    server_count: 1
   roles:
     - azure-setup
     - azure-hosts

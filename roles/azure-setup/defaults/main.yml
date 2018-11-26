@@ -15,10 +15,11 @@ source_address_prefix: "*"
 
 # Machines
 host_vm_prefix: "host"
-host_count: 1
+host_vm_size: Standard_B1ms
+host_admin_pub_path: ~/.ssh/id_rsa.pub
 
 server_vm_prefix: "server"
-server_count: 1
+server_vm_size: Standard_B1ms
 
 # Below is UTF-16 Base64 encoding for:
 #   Invoke-Expression -Command ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1')); Enable-WSManCredSSP -Role Server -Force

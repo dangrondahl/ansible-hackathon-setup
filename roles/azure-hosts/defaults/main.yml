@@ -3,5 +3,5 @@
 hostfile: azurehosts
 
 hosts_start_line: 2
-hosts_end_line: "{{ hosts_start_line + host_count}}"
+hosts_end_line:  "{{ hosts_start_line|int + host_count|int}}"
 server_start_line: "{{ hosts_end_line }}"

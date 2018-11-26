@@ -1,25 +1,20 @@
-- hosts: hostmachines
+- hosts: hosts
   become: true
   roles:
     - role: geerlingguy.ansible
   vars:
-    user: "developer"
+#    user: "developer"
     # To create the password use: 
     # ansible all -i localhost, -m debug -a "msg={{ 'mypassword' | password_hash('sha512', 'mysecretsalt') }}"
-    password: "$6$mysecretsalt$zav3we8Mej2y5GPXs7e6gJcQuZqfQYMnfCyR5dKdlU2UHXWv3/AjPB/ORFtK0YDViU6eyfSPBeaLC/DRXRfAT/"
+#    password: "$6$mysecretsalt$zav3we8Mej2y5GPXs7e6gJcQuZqfQYMnfCyR5dKdlU2UHXWv3/AjPB/ORFtK0YDViU6eyfSPBeaLC/DRXRfAT/"
   tasks:
-    - name: install pip
+    - name: Install a list of packages
       apt:
-        name: python-pip
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - python-pip
+        - tree
     - name: install pywinrm
       pip:    
         name: "pywinrm"
-    - name: "Add the user '{{ user }}' with primary group of 'admin'"
-      user:
-        name: "{{ user }}"
-        comment: Developer
-        password: "{{ password }}"
-        group: admin
-    - name: "Install tree"
-      apt: 
-        name: tree
