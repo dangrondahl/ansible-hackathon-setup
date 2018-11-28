@@ -10,21 +10,21 @@
       default: 1
       private: no
     - name: "host_admin"
-      prompt: "Host administrator?"
+      prompt: "Host administrator username?"
       private: no
     - name: "host_admin_password"
-      prompt: "Password of the host administrator?"
+      prompt: "Host administrator password?"
       private: yes
     - name: "server_count"
       prompt: "Number of servers?"
       default: 1
       private: no      
     - name: "server_admin"
-      prompt: "Server administrator?"
+      prompt: "Server administrator username?"
       default: "developer"
       private: no
     - name: "server_admin_password"
-      prompt: "Password of the server administrator?"
+      prompt: "Server administrator password?"
       private: yes
   vars:
     project_prefix: ansiblehack
